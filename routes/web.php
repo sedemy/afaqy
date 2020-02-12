@@ -15,4 +15,4 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('get-expenses','ExpensesController@get_expenses');
+Route::get('get-expenses','ExpensesController@get_expenses')->middleware('throttle:5');

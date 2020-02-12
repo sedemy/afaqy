@@ -18,50 +18,75 @@ class ExpensesController extends Controller
     
     public function get_expenses()
     {
-        $page = request('page');
+        $page = request('page') ?? 1;
         $vehicle_name = request('vehicle_name');
+        $expense_type = request('expense_type');
+
         $min_cost = request('min_cost');
         $max_cost = request('max_cost');
         $min_creation_date = request('min_creation_date');
         $max_creation_date = request('max_creation_date');
 
-        $sort_by = request('sort_by'); // cost or creation_date
-        $sort_direction = request('sort_direction');
+        $sort_by = strtolower(request('sort_by')); // cost or creation_date
+        $sort_direction = strtolower(request('sort_direction'));
         
 
         $limit = 10;
+        if($min_cost !='' ||  $max_cost !='' || $min_creation_date!='' || $max_creation_date !=''){
+            $limit = 1;
+            $page = 1;
+        }
+
         $skip = (intval($page) - 1 ) * $limit ;
 
-        $time1= time();
-        $fuelEntry = FuelEntry::select(DB::raw("vehicle_id,cost,entry_date as createdAt,'fuel' as type"));
 
-        $insurances = InsurancePayment::select(DB::raw("vehicle_id,amount as cost,contract_date as createdAt,'service' as type"));
+        $fuelEntry = DB::table('fuel_entries')->select(DB::raw("vehicle_id,cost,entry_date as createdAt,'fuel' as type"));
+        
+        $insurances = DB::table('insurance_payments')->select(DB::raw("vehicle_id,amount as cost,contract_date as createdAt,'service' as type"));
 
-        $services = Service::select(DB::raw("vehicle_id,total as cost,created_at as createdAt,'insurance' as type"));
+        $services = DB::table('services')->select(DB::raw("vehicle_id,total as cost,created_at as createdAt,'insurance' as type"));
         
 
-        $expenses = $fuelEntry->union($insurances)->union($services);
+        $union = $fuelEntry->unionAll($insurances)->unionAll($services);
 
-        // ->having('type','service')
+        $querySql = $union->toSql();
+
+        $expenses = DB::table(DB::raw("($querySql) as union_query"));//->mergeBindings($union);
+
+        $expenses->select(['vehicle_id', 'cost', 'createdAt', 'type','vehicles.name','vehicles.plate_number']);
+
+        $expenses->join('vehicles','vehicles.id','=','union_query.vehicle_id');
+
+
+        
+        if($expense_type !=''){
+            $expenses->whereIn('type',@explode(',',$expense_type));
+        }
 
         if($vehicle_name!=''){
-            $expenses->whereHas('vehicle', function($q) use ($vehicle_name){
-                $q->where('name','like','%'.$vehicle_name.'%');
-            });
+            $expenses->where('name','like','%'.$vehicle_name.'%');
         }    
 
-        $expenses = $expenses->with('vehicle')
-        // ->take($limit)->skip($skip)
-        ->get()
-       // ->chunk(10)
-        ;
+        if($min_cost!=''){
+            $expenses->orderBy('cost', 'asc');
+        }elseif($max_cost!=''){
+            $expenses->orderBy('cost', 'desc');
+        }
 
+        if($min_creation_date!=''){
+            $expenses->orderBy('createdAt', 'asc');
+        }elseif($max_creation_date!=''){
+            $expenses->orderBy('createdAt', 'desc');
+        }
+
+        if($sort_by == 'cost' || $sort_by == 'creation_date'){
+            $sort_direction = $sort_direction == 'desc' ? 'desc':'asc';
+            $expenses->orderBy($sort_by, $sort_direction);
+        }
         
-        $time2= time();
-        echo ($time2 - $time1);
-        return $expenses;
+        $expenses->take($limit)->skip($skip);
 
-        return ExpensesResource::collection($expenses);
+        return ExpensesResource::collection($expenses->get());
 
 
     }

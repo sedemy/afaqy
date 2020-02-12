@@ -50,6 +50,10 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Exception $exception)
     {
+
+        if ($exception->getStatusCode() == 429) {
+            return response()->json(['status'=>false,'message'=>"Too many requests, You cannot access this api more than 5 times per minute"],$exception->getStatusCode());
+        }
         return parent::render($request, $exception);
     }
 }
