@@ -14,3 +14,6 @@
 - **max_creation_date**  set any value to this parameter to get maximum creation_date
 - **sort_by**  to make sorting add "cost" or "creation_date"
 - **sort_direction**  add "asc" or "desc"
+
+- **page** add number of page to get results 10 by 10
+
